@@ -1,0 +1,206 @@
+// state.js — DOM-free game state: session → window → pane tree + input machine.
+//
+// Layout mapping (keep this the single source of truth):
+//   tmux `%` / split-window -h  = LEFT/RIGHT split = dir:'h' = CSS flex-direction:row
+//   tmux `"` / split-window -v  = TOP/BOTTOM split = dir:'v' = CSS flex-direction:column
+//
+// A window owns a binary tree. Internal nodes are `split`s, leaves are `pane`s —
+// exactly how tmux models a window internally. Rendering and goal-checking are
+// both just walks over this tree.
+
+import { keysToActions } from './keymap.js';
+
+let _pid = 0;
+let _wid = 0;
+
+export const ARROWS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+
+export function makePane() {
+  return { type: 'pane', id: 'p' + ++_pid, zoomed: false };
+}
+
+// Build a window's root node from a named preset.
+export function buildLayout(name) {
+  switch (name) {
+    case 'two-h':
+      return { type: 'split', dir: 'h', ratio: 0.5, children: [makePane(), makePane()] };
+    case 'two-v':
+      return { type: 'split', dir: 'v', ratio: 0.5, children: [makePane(), makePane()] };
+    case '2x2':
+      return {
+        type: 'split', dir: 'v', ratio: 0.5, children: [
+          { type: 'split', dir: 'h', ratio: 0.5, children: [makePane(), makePane()] },
+          { type: 'split', dir: 'h', ratio: 0.5, children: [makePane(), makePane()] },
+        ],
+      };
+    case 'single':
+    default:
+      return makePane();
+  }
+}
+
+export function makeWindow(name, layoutName, index) {
+  const root = buildLayout(layoutName || 'single');
+  return {
+    id: 'w' + ++_wid,
+    name: name || 'bash',
+    index,
+    root,
+    activePaneId: leaves(root)[0].id,
+  };
+}
+
+// Build a fresh GameState from a level definition. `unlockedActions` is a Set of
+// action ids; if omitted it's derived from the level's `unlock` keys (which are
+// authored as stock tmux keys, so they're translated through the default map).
+export function makeState(level, unlockedActions) {
+  const winDefs = (level.start && level.start.windows) || [{ name: 'bash', layout: 'single' }];
+  const windows = winDefs.map((w, i) => makeWindow(w.name, w.layout, i));
+  return {
+    session: { name: (level.start && level.start.session) || 'main', detached: false },
+    windows,
+    activeWindowIndex: 0,
+    prefix: 'idle',                 // 'idle' | 'armed'
+    mode: 'normal',                 // 'normal' | 'rename' | 'window-list'
+    renameBuffer: null,
+    toast: null,                    // transient nudge text shown in the HUD
+    unlockedActions: unlockedActions || keysToActions(level.unlock),
+    levelId: level.id,
+  };
+}
+
+// ---- tree walks ------------------------------------------------------------
+
+// Leaves in depth-first (top-to-bottom, left-to-right) order. This order also
+// defines each pane's display index.
+export function leaves(node, acc = []) {
+  if (node.type === 'pane') { acc.push(node); return acc; }
+  leaves(node.children[0], acc);
+  leaves(node.children[1], acc);
+  return acc;
+}
+
+export function activeWindow(s) {
+  return s.windows[s.activeWindowIndex];
+}
+
+export function activePane(s) {
+  const w = activeWindow(s);
+  return leaves(w.root).find((p) => p.id === w.activePaneId);
+}
+
+export function activePaneIndex(s) {
+  const w = activeWindow(s);
+  return leaves(w.root).findIndex((p) => p.id === w.activePaneId);
+}
+
+// ---- tree surgery ----------------------------------------------------------
+
+// Replace the leaf `paneId` with a split of [oldPane, newPane].
+// Returns { root, newPaneId } (newPaneId is null if the leaf wasn't found).
+export function splitPane(root, paneId, dir) {
+  const newPane = makePane();
+  let found = false;
+  function rebuild(node) {
+    if (node.type === 'pane') {
+      if (node.id === paneId) {
+        found = true;
+        return { type: 'split', dir, ratio: 0.5, children: [node, newPane] };
+      }
+      return node;
+    }
+    node.children[0] = rebuild(node.children[0]);
+    node.children[1] = rebuild(node.children[1]);
+    return node;
+  }
+  const newRoot = rebuild(root);
+  return { root: newRoot, newPaneId: found ? newPane.id : null };
+}
+
+// Remove the leaf `paneId`; its parent split collapses into the sibling subtree.
+// Returns { root, removed }. Refuses to remove a window's only pane.
+export function removeLeaf(root, paneId) {
+  if (root.type === 'pane') return { root, removed: false };
+  let removed = false;
+  function rebuild(node) {
+    if (node.type === 'pane') return node;
+    const [c0, c1] = node.children;
+    if (c0.type === 'pane' && c0.id === paneId) { removed = true; return rebuild(c1); }
+    if (c1.type === 'pane' && c1.id === paneId) { removed = true; return rebuild(c0); }
+    node.children[0] = rebuild(c0);
+    node.children[1] = rebuild(c1);
+    return node;
+  }
+  const newRoot = rebuild(root);
+  return { root: newRoot, removed };
+}
+
+// ---- navigation ------------------------------------------------------------
+
+function clearZoom(win) {
+  leaves(win.root).forEach((p) => { p.zoomed = false; });
+}
+
+// prefix o — cycle to the next pane in DFS order.
+export function nextPane(s) {
+  const w = activeWindow(s);
+  const ls = leaves(w.root);
+  if (ls.length <= 1) return false;
+  clearZoom(w);
+  const i = ls.findIndex((p) => p.id === w.activePaneId);
+  w.activePaneId = ls[(i + 1) % ls.length].id;
+  return true;
+}
+
+// Geometry of each pane in [0,1] coordinates, derived from split ratios.
+// Lets us do tmux-like directional pane selection without a rendered DOM.
+export function computeRects(root) {
+  const map = new Map();
+  function rec(node, x, y, w, h) {
+    if (node.type === 'pane') { map.set(node.id, { x, y, w, h }); return; }
+    const r = node.ratio;
+    if (node.dir === 'h') {
+      rec(node.children[0], x, y, w * r, h);
+      rec(node.children[1], x + w * r, y, w * (1 - r), h);
+    } else {
+      rec(node.children[0], x, y, w, h * r);
+      rec(node.children[1], x, y + h * r, w, h * (1 - r));
+    }
+  }
+  rec(root, 0, 0, 1, 1);
+  return map;
+}
+
+// prefix ← ↑ ↓ → — select the nearest pane in the given direction.
+export function selectDirection(s, dir) {
+  const w = activeWindow(s);
+  const rects = computeRects(w.root);
+  const cur = rects.get(w.activePaneId);
+  if (!cur) return false;
+  const cx = cur.x + cur.w / 2;
+  const cy = cur.y + cur.h / 2;
+  let best = null;
+  let bestDist = Infinity;
+  for (const [id, r] of rects) {
+    if (id === w.activePaneId) continue;
+    const dx = r.x + r.w / 2 - cx;
+    const dy = r.y + r.h / 2 - cy;
+    const ok =
+      (dir === 'left' && dx < -1e-6) ||
+      (dir === 'right' && dx > 1e-6) ||
+      (dir === 'up' && dy < -1e-6) ||
+      (dir === 'down' && dy > 1e-6);
+    if (!ok) continue;
+    const horizontal = dir === 'left' || dir === 'right';
+    const along = horizontal ? Math.abs(dx) : Math.abs(dy);
+    const perp = horizontal ? Math.abs(dy) : Math.abs(dx);
+    const dist = along + perp * 2; // prefer panes that line up with the current one
+    if (dist < bestDist) { bestDist = dist; best = id; }
+  }
+  if (best) {
+    clearZoom(w);
+    w.activePaneId = best;
+    return true;
+  }
+  return false;
+}

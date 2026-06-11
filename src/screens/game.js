@@ -1,0 +1,213 @@
+// screens/game.js — one level run: builds the play screen, wires the keyboard,
+// re-renders on every state change, detects the win, and shows the reward.
+
+import { LEVELS } from '../levels.js';
+import { makeState } from '../state.js';
+import { renderTmux } from '../render.js';
+import { checkGoal } from '../goals.js';
+import { markComplete, loadProgress, setCurrent } from '../progress.js';
+import { createInput } from '../input.js';
+import { resolveKeymap, keysToActions, keysForActions } from '../keymap.js';
+import { el, clear } from '../dom.js';
+import { chip } from './chips.js';
+
+export function startGame(root, levelId, nav) {
+  const level = LEVELS.find((l) => l.id === levelId);
+  if (!level) { nav.levels(); return () => {}; }
+  setCurrent(level.id);
+
+  // The player's remap (prefix + rebinds) drives input, keycards, HUD and chips.
+  const keymap = resolveKeymap(loadProgress().settings);
+  const state = makeState(level, keysToActions(level.unlock));
+  let solved = false;
+  let toastTimer = null;
+
+  // ---- layout ----
+  const screen = el('div', 'screen game');
+
+  const header = el('div', 'game__header');
+  const back = el('button', 'btn btn--ghost', '← Levels');
+  back.addEventListener('click', () => nav.levels());
+  const titles = el('div', 'game__titles');
+  titles.appendChild(el('h2', null, level.title));
+  titles.appendChild(el('p', 'muted', level.blurb));
+  const worldTag = el('span', 'tag', level.world);
+  header.append(back, titles, worldTag);
+
+  const main = el('div', 'game__main');
+  const stage = el('div', 'game__stage');
+  const side = el('div', 'game__side');
+  main.append(stage, side);
+
+  const hud = el('div', 'game__hud');
+  const overlay = el('div', 'overlay hidden');
+
+  screen.append(header, main, hud, overlay);
+  clear(root); root.appendChild(screen);
+
+  // ---- rendering ----
+  function renderStage() {
+    clear(stage);
+    stage.appendChild(renderTmux(state));
+  }
+
+  function renderSide() {
+    clear(side);
+    side.appendChild(el('h3', 'side__h', 'Objective'));
+    side.appendChild(el('p', 'objective', level.objective));
+
+    side.appendChild(el('h3', 'side__h', 'Keys this level'));
+    const keys = el('div', 'keycards');
+    for (const k of level.keys) {
+      const card = el('div', 'keycard');
+      const chord = el('div', 'keycard__chord');
+      chord.appendChild(el('kbd', null, keymap.prefixLabel));
+      chord.appendChild(el('span', 'keycard__then', 'then'));
+      const glyphs = k.keysLabel ? [k.keysLabel] : keysForActions(keymap, k.actions);
+      for (const g of glyphs) chord.appendChild(el('kbd', null, g));
+      card.appendChild(chord);
+      card.appendChild(el('div', 'keycard__desc', k.desc));
+      keys.appendChild(card);
+    }
+    side.appendChild(keys);
+
+    const hintBox = el('div', 'hint');
+    hintBox.appendChild(el('span', 'hint__icon', '💡'));
+    hintBox.appendChild(el('span', null, level.hint));
+    side.appendChild(hintBox);
+  }
+
+  function renderHud() {
+    clear(hud);
+
+    const left = el('div', 'hud__left');
+    if (state.prefix === 'armed') {
+      left.appendChild(el('span', 'armed', 'PREFIX ARMED — press a key'));
+    } else {
+      const idle = el('span', 'prefixhint');
+      idle.appendChild(el('kbd', null, keymap.prefixLabel));
+      idle.appendChild(document.createTextNode(' — the prefix. Press it, then a command key.'));
+      left.appendChild(idle);
+    }
+    if (state.toast) left.appendChild(el('span', 'toast', state.toast));
+    hud.appendChild(left);
+
+    const tray = el('div', 'tray');
+    const collected = loadProgress().collected;
+    tray.appendChild(el('span', 'tray__label', 'Collected:'));
+    if (collected.length === 0) {
+      tray.appendChild(el('span', 'muted', 'nothing yet'));
+    } else {
+      for (const token of collected) tray.appendChild(chip(token, keymap));
+    }
+    hud.appendChild(tray);
+  }
+
+  function renderOverlay() {
+    if (solved) return; // the win overlay is drawn by showComplete()
+    if (state.mode === 'rename') {
+      overlay.className = 'overlay';
+      clear(overlay);
+      const box = el('div', 'modal');
+      box.appendChild(el('h3', null, 'Rename window'));
+      const field = el('div', 'rename-field');
+      field.appendChild(document.createTextNode('(rename-window) '));
+      field.appendChild(el('span', 'rename-text', state.renameBuffer || ''));
+      field.appendChild(el('span', 'pane__cursor', '█'));
+      box.appendChild(field);
+      box.appendChild(el('p', 'muted', 'Type a name, then Enter. Esc to cancel.'));
+      overlay.appendChild(box);
+    } else if (state.mode === 'window-list') {
+      overlay.className = 'overlay';
+      clear(overlay);
+      const box = el('div', 'modal');
+      box.appendChild(el('h3', null, 'Windows'));
+      const list = el('div', 'winlist');
+      state.windows.forEach((w, i) => {
+        const row = el('div', 'winlist__row' + (i === state.activeWindowIndex ? ' is-active' : ''));
+        row.textContent = `${i}: ${w.name}`;
+        list.appendChild(row);
+      });
+      box.appendChild(list);
+      box.appendChild(el('p', 'muted', 'Press a number to jump. Esc to close.'));
+      overlay.appendChild(box);
+    } else {
+      overlay.className = 'overlay hidden';
+      clear(overlay);
+    }
+  }
+
+  function rerender() {
+    renderStage();
+    renderHud();
+    renderOverlay();
+  }
+
+  function notify(msg) {
+    state.toast = msg;
+    renderHud();
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { state.toast = null; renderHud(); }, 2000);
+  }
+
+  function checkWin() {
+    if (solved) return;
+    if (checkGoal(state, level.goal)) {
+      solved = true;
+      const p = markComplete(level.id, level.rewards);
+      showComplete(p);
+    }
+  }
+
+  function showComplete(progress) {
+    const idx = LEVELS.findIndex((l) => l.id === level.id);
+    const next = LEVELS[idx + 1];
+
+    overlay.className = 'overlay';
+    clear(overlay);
+    const box = el('div', 'modal modal--win');
+    box.appendChild(el('div', 'win__burst', '✦'));
+    box.appendChild(el('h2', null, 'Level complete!'));
+    box.appendChild(el('p', 'muted', level.title));
+
+    if (level.rewards && level.rewards.length) {
+      const got = el('div', 'win__rewards');
+      got.appendChild(el('span', 'muted', 'You collected:'));
+      for (const r of level.rewards) got.appendChild(chip(r, keymap));
+      box.appendChild(got);
+    }
+
+    const actions = el('div', 'modal__actions');
+    if (next) {
+      const nx = el('button', 'btn btn--primary', `Next: ${next.title} →`);
+      nx.addEventListener('click', () => nav.game(next.id));
+      actions.appendChild(nx);
+    } else {
+      box.appendChild(el('p', null, 'You’ve finished every level. Your fingers know tmux now. 🎉'));
+    }
+    const toLevels = el('button', 'btn btn--ghost', 'Level map');
+    toLevels.addEventListener('click', () => nav.levels());
+    actions.appendChild(toLevels);
+    box.appendChild(actions);
+    overlay.appendChild(box);
+  }
+
+  // ---- wire up input ----
+  const onKey = createInput({
+    getState: () => state,
+    keymap,
+    notify,
+    onRender: rerender,
+    afterCommand: () => { rerender(); checkWin(); },
+  });
+  window.addEventListener('keydown', onKey);
+
+  renderSide();
+  rerender();
+
+  // cleanup: detach the global listener when navigating away
+  return () => {
+    window.removeEventListener('keydown', onKey);
+    if (toastTimer) clearTimeout(toastTimer);
+  };
+}

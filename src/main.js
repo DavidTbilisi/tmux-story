@@ -1,0 +1,28 @@
+// main.js — entry point + tiny router. Swaps the #app contents between the
+// screens and makes sure each screen's listeners are cleaned up before the next
+// one mounts (the game screen attaches a global keydown handler).
+
+import { renderMenu } from './screens/menu.js';
+import { renderLevelSelect } from './screens/levelSelect.js';
+import { startGame } from './screens/game.js';
+import { renderSettings } from './screens/settings.js';
+
+const app = document.getElementById('app');
+let cleanup = null;
+
+const nav = {
+  menu: () => go('menu'),
+  levels: () => go('levels'),
+  game: (levelId) => go('game', { levelId }),
+  settings: () => go('settings'),
+};
+
+function go(view, params = {}) {
+  if (cleanup) { cleanup(); cleanup = null; }
+  if (view === 'menu') cleanup = renderMenu(app, nav);
+  else if (view === 'levels') cleanup = renderLevelSelect(app, nav);
+  else if (view === 'game') cleanup = startGame(app, params.levelId, nav);
+  else if (view === 'settings') cleanup = renderSettings(app, nav);
+}
+
+go('menu');
