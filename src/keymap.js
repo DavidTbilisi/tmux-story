@@ -33,6 +33,17 @@ export const ACTION_META = {
   'prev-window':   { label: 'prev window',  category: 'window', group: 'window', glyph: 'p' },
   'rename-window': { label: 'rename window',category: 'window', group: 'window', glyph: ',' },
   'window-list':   { label: 'window list',  category: 'window', group: 'window', glyph: 'w' },
+  'swap-pane-prev':    { label: 'swap ←',        category: 'pane',   group: 'pane',   glyph: '{' },
+  'swap-pane-next':    { label: 'swap →',        category: 'pane',   group: 'pane',   glyph: '}' },
+  'break-pane':        { label: 'break pane',    category: 'pane',   group: 'pane',   glyph: '!' },
+  'pane-numbers':      { label: 'pane numbers',   category: 'pane',    group: 'nav',    glyph: 'q' },
+  'detach':            { label: 'detach',         category: 'session', group: 'session',glyph: 'd' },
+  'rename-session':    { label: 'rename session', category: 'session', group: 'session',glyph: '$' },
+  'last-window':       { label: 'last window',    category: 'window',  group: 'window', glyph: 'l' },
+  'resize-pane-left':  { label: 'resize ←',       category: 'pane',    group: 'resize', glyph: 'M-←' },
+  'resize-pane-right': { label: 'resize →',      category: 'pane',   group: 'resize', glyph: 'M-→' },
+  'resize-pane-up':    { label: 'resize ↑',      category: 'pane',   group: 'resize', glyph: 'M-↑' },
+  'resize-pane-down':  { label: 'resize ↓',      category: 'pane',   group: 'resize', glyph: 'M-↓' },
 };
 for (let i = 0; i <= 9; i++) {
   ACTION_META['select-window-' + i] = {
@@ -46,6 +57,11 @@ export const DEFAULT_ACTION_TO_KEY = {
   'pane-left': 'ArrowLeft', 'pane-right': 'ArrowRight', 'pane-up': 'ArrowUp', 'pane-down': 'ArrowDown',
   'zoom': 'z', 'kill-pane': 'x',
   'new-window': 'c', 'next-window': 'n', 'prev-window': 'p', 'rename-window': ',', 'window-list': 'w',
+  'swap-pane-prev': '{', 'swap-pane-next': '}', 'break-pane': '!',
+  'pane-numbers': 'q', 'detach': 'd', 'rename-session': '$',
+  'last-window': 'l',
+  'resize-pane-left': 'M-ArrowLeft', 'resize-pane-right': 'M-ArrowRight',
+  'resize-pane-up':   'M-ArrowUp',   'resize-pane-down':  'M-ArrowDown',
 };
 for (let i = 0; i <= 9; i++) DEFAULT_ACTION_TO_KEY['select-window-' + i] = String(i);
 
@@ -63,6 +79,7 @@ export const DEFAULT_KEY_TO_ACTION = invert(DEFAULT_ACTION_TO_KEY);
 
 const KEY_GLYPH = {
   ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', ' ': 'Space',
+  'M-ArrowLeft': 'M-←', 'M-ArrowRight': 'M-→', 'M-ArrowUp': 'M-↑', 'M-ArrowDown': 'M-↓',
 };
 
 // A key → the glyph we show for it (arrows become symbols; printable keys are
@@ -99,6 +116,8 @@ export function keysForActions(keymap, actions) {
 export const TOKEN_TO_ACTION = {
   '%': 'split-h', '"': 'split-v', 'o': 'cycle-pane', 'z': 'zoom', 'x': 'kill-pane',
   'c': 'new-window', 'n': 'next-window', 'p': 'prev-window', ',': 'rename-window', 'w': 'window-list',
+  '{': 'swap-pane-prev', '}': 'swap-pane-next', '!': 'break-pane',
+  'q': 'pane-numbers', 'd': 'detach', '$': 'rename-session',
 };
 
 // ---- .tmux.conf parsing ----------------------------------------------------
@@ -145,8 +164,13 @@ function tmuxKeyToJs(tokRaw) {
   else if (t === '\\\\') t = '\\';
   const named = { Up: 'ArrowUp', Down: 'ArrowDown', Left: 'ArrowLeft', Right: 'ArrowRight', Space: ' ' };
   if (named[t]) return named[t];
-  // modified chords (C-/M-/S-) and function keys can't be a single armed key.
-  if (/^[CMS]-/.test(t) || /^F\d+$/i.test(t)) return null;
+  // M-Arrow (Alt+Arrow) is supported for resize-pane bindings.
+  if (/^M-/.test(t)) {
+    const rest = t.slice(2);
+    return named[rest] ? 'M-' + named[rest] : null;
+  }
+  // Other modified chords (C-/S-) and function keys can't be a single armed key.
+  if (/^[CS]-/.test(t) || /^F\d+$/i.test(t)) return null;
   if (t.length === 1) return t;
   return null;
 }
@@ -178,7 +202,13 @@ function commandToAction(cmdRaw, args) {
     }
     case 'last-pane':   return 'cycle-pane';
     case 'kill-pane':   return 'kill-pane';
-    case 'resize-pane': return args.includes('-Z') ? 'zoom' : null; // only zoom is simulated
+    case 'resize-pane':
+      if (args.includes('-Z')) return 'zoom';
+      if (args.includes('-L')) return 'resize-pane-left';
+      if (args.includes('-R')) return 'resize-pane-right';
+      if (args.includes('-U')) return 'resize-pane-up';
+      if (args.includes('-D')) return 'resize-pane-down';
+      return null;
     case 'new-window':  return 'new-window';
     case 'next-window': return 'next-window';
     case 'previous-window': return 'prev-window';

@@ -18,9 +18,31 @@ export function startGame(root, levelId, nav) {
 
   // The player's remap (prefix + rebinds) drives input, keycards, HUD and chips.
   const keymap = resolveKeymap(loadProgress().settings);
-  const state = makeState(level, keysToActions(level.unlock));
+  let state = makeState(level, keysToActions(level.unlock));
+  const drillsNeeded = level.drills ?? 3;
+  const par = level.par ?? 10;
+  let drillsDone = 0;
   let solved = false;
   let toastTimer = null;
+  let repStart = performance.now();
+  let timerInterval = null;
+
+  function startTimer() {
+    stopTimer();
+    timerInterval = setInterval(() => {
+      const span = document.querySelector('.drill-timer');
+      if (!span) return;
+      const elapsed = (performance.now() - repStart) / 1000;
+      span.textContent = elapsed.toFixed(1) + 's';
+      const ratio = elapsed / par;
+      span.className = 'drill-timer' +
+        (ratio > 0.9 ? ' drill-timer--over' : ratio > 0.6 ? ' drill-timer--warn' : '');
+    }, 100);
+  }
+
+  function stopTimer() {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  }
 
   // ---- layout ----
   const screen = el('div', 'screen game');
@@ -92,6 +114,22 @@ export function startGame(root, levelId, nav) {
     if (state.toast) left.appendChild(el('span', 'toast', state.toast));
     hud.appendChild(left);
 
+    const drillEl = el('div', 'drill-progress');
+    const dots = Array.from({ length: drillsNeeded }, (_, i) =>
+      el('span', i < drillsDone ? 'drill-dot drill-dot--done' : 'drill-dot', '●')
+    );
+    dots.forEach(d => drillEl.appendChild(d));
+    drillEl.appendChild(el('span', 'drill-label', `${drillsDone}/${drillsNeeded}`));
+    drillEl.appendChild(el('span', 'drill-sep', '·'));
+    const elapsed0 = (performance.now() - repStart) / 1000;
+    const ratio0 = elapsed0 / par;
+    const timerSpan = el('span', 'drill-timer' +
+      (ratio0 > 0.9 ? ' drill-timer--over' : ratio0 > 0.6 ? ' drill-timer--warn' : ''),
+      elapsed0.toFixed(1) + 's');
+    drillEl.appendChild(timerSpan);
+    drillEl.appendChild(el('span', 'drill-par', `/ ${par}s`));
+    hud.appendChild(drillEl);
+
     const tray = el('div', 'tray');
     const collected = loadProgress().collected;
     tray.appendChild(el('span', 'tray__label', 'Collected:'));
@@ -112,6 +150,18 @@ export function startGame(root, levelId, nav) {
       box.appendChild(el('h3', null, 'Rename window'));
       const field = el('div', 'rename-field');
       field.appendChild(document.createTextNode('(rename-window) '));
+      field.appendChild(el('span', 'rename-text', state.renameBuffer || ''));
+      field.appendChild(el('span', 'pane__cursor', '█'));
+      box.appendChild(field);
+      box.appendChild(el('p', 'muted', 'Type a name, then Enter. Esc to cancel.'));
+      overlay.appendChild(box);
+    } else if (state.mode === 'rename-session') {
+      overlay.className = 'overlay';
+      clear(overlay);
+      const box = el('div', 'modal');
+      box.appendChild(el('h3', null, 'Rename session'));
+      const field = el('div', 'rename-field');
+      field.appendChild(document.createTextNode('(rename-session) '));
       field.appendChild(el('span', 'rename-text', state.renameBuffer || ''));
       field.appendChild(el('span', 'pane__cursor', '█'));
       box.appendChild(field);
@@ -150,12 +200,30 @@ export function startGame(root, levelId, nav) {
     toastTimer = setTimeout(() => { state.toast = null; renderHud(); }, 2000);
   }
 
+  function resetForDrill(msg) {
+    state = makeState(level, keysToActions(level.unlock));
+    repStart = performance.now();
+    notify(msg);
+    rerender();
+  }
+
   function checkWin() {
     if (solved) return;
     if (checkGoal(state, level.goal)) {
-      solved = true;
-      const p = markComplete(level.id, level.rewards);
-      showComplete(p);
+      const elapsed = (performance.now() - repStart) / 1000;
+      if (elapsed > par) {
+        resetForDrill(`${elapsed.toFixed(1)}s — need < ${par}s. Again!`);
+        return;
+      }
+      drillsDone++;
+      if (drillsDone >= drillsNeeded) {
+        stopTimer();
+        solved = true;
+        const p = markComplete(level.id, level.rewards);
+        showComplete(p);
+      } else {
+        resetForDrill(`✓ ${elapsed.toFixed(1)}s — ${drillsDone}/${drillsNeeded}. Again!`);
+      }
     }
   }
 
@@ -183,7 +251,7 @@ export function startGame(root, levelId, nav) {
       nx.addEventListener('click', () => nav.game(next.id));
       actions.appendChild(nx);
     } else {
-      box.appendChild(el('p', null, 'You’ve finished every level. Your fingers know tmux now. 🎉'));
+      box.appendChild(el('p', null, "You've finished every level. Your fingers know tmux now. 🎉"));
     }
     const toLevels = el('button', 'btn btn--ghost', 'Level map');
     toLevels.addEventListener('click', () => nav.levels());
@@ -204,10 +272,12 @@ export function startGame(root, levelId, nav) {
 
   renderSide();
   rerender();
+  startTimer();
 
   // cleanup: detach the global listener when navigating away
   return () => {
     window.removeEventListener('keydown', onKey);
     if (toastTimer) clearTimeout(toastTimer);
+    stopTimer();
   };
 }

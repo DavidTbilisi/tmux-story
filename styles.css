@@ -184,6 +184,16 @@ kbd {
   font-size: 11px; color: #3d4751;
 }
 .pane--active .pane__num { color: var(--green-bright); }
+.pane__num--big {
+  top: 50% !important; right: auto !important; left: 50% !important;
+  transform: translate(-50%, -50%);
+  font-size: 1.8rem; font-weight: 700;
+  color: var(--green-bright) !important;
+  background: rgba(7, 9, 12, 0.82);
+  padding: 6px 14px; border-radius: 8px;
+  border: 1px solid var(--green);
+  pointer-events: none;
+}
 .pane__flag {
   position: absolute; top: 4px; left: 6px;
   font-size: 11px; color: var(--gold);
@@ -238,6 +248,16 @@ kbd {
 @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(63,185,80,.5);} 50% { box-shadow: 0 0 0 6px rgba(63,185,80,0);} }
 .toast { font-size: 13px; color: var(--gold); }
 
+.drill-progress { display: flex; align-items: center; gap: 4px; }
+.drill-dot { font-size: 14px; color: var(--ink-dim); line-height: 1; }
+.drill-dot--done { color: var(--green-bright); }
+.drill-label { font-size: 12px; color: var(--ink-dim); margin-left: 4px; }
+.drill-sep { font-size: 12px; color: var(--ink-dim); margin: 0 4px; }
+.drill-timer { font-size: 13px; font-weight: 600; color: var(--green-bright); font-variant-numeric: tabular-nums; }
+.drill-timer.drill-timer--warn { color: var(--gold); }
+.drill-timer.drill-timer--over { color: #f85149; }
+.drill-par { font-size: 12px; color: var(--ink-dim); margin-left: 2px; }
+
 .tray { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tray__label { font-size: 12px; color: var(--ink-dim); }
 
@@ -276,6 +296,12 @@ kbd {
 .win__burst { font-size: 40px; color: var(--gold); animation: pop .4s ease-out; }
 @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .win__rewards { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
+/* detached-session view inside the terminal area */
+.terminal--detached { align-items: center; justify-content: center; flex-direction: column; }
+.detached-msg { text-align: center; padding: 20px; }
+.detached-msg__title { color: var(--green-bright); font-size: 14px; margin-bottom: 8px; }
+.detached-msg__sub { color: var(--ink-dim); font-size: 13px; margin: 0; }
 
 .rename-field {
   font-family: var(--mono);

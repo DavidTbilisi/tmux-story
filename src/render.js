@@ -11,9 +11,23 @@ import { el } from './dom.js';
 import { leaves, activeWindow } from './state.js';
 
 export function renderTmux(state) {
+  if (state.session && state.session.detached) {
+    const wrap = el('div', 'tmux');
+    const term = el('div', 'terminal terminal--detached');
+    const msg = el('div', 'detached-msg');
+    msg.appendChild(el('div', 'detached-msg__title',
+      `[detached (from session "${state.session.name}")]`));
+    msg.appendChild(el('p', 'detached-msg__sub',
+      'The session is still running. Type tmux attach to return.'));
+    term.appendChild(msg);
+    wrap.appendChild(term);
+    return wrap;
+  }
+
   const win = activeWindow(state);
   const order = leaves(win.root);
   const indexOf = new Map(order.map((p, i) => [p.id, i]));
+  const numMode = state.mode === 'pane-numbers';
 
   const wrap = el('div', 'tmux');
   if (state.prefix === 'armed') wrap.classList.add('tmux--armed');
@@ -21,11 +35,11 @@ export function renderTmux(state) {
   const term = el('div', 'terminal');
   const zoomed = order.find((p) => p.zoomed);
   if (zoomed) {
-    const pane = renderPane(zoomed, win.activePaneId, indexOf, true);
+    const pane = renderPane(zoomed, win.activePaneId, indexOf, true, numMode);
     pane.style.flexGrow = 1;
     term.appendChild(pane);
   } else {
-    const rootEl = renderNode(win.root, win.activePaneId, indexOf);
+    const rootEl = renderNode(win.root, win.activePaneId, indexOf, numMode);
     rootEl.style.flexGrow = 1;
     term.appendChild(rootEl);
   }
@@ -35,11 +49,11 @@ export function renderTmux(state) {
   return wrap;
 }
 
-function renderNode(node, activeId, indexOf) {
-  if (node.type === 'pane') return renderPane(node, activeId, indexOf, false);
+function renderNode(node, activeId, indexOf, numMode) {
+  if (node.type === 'pane') return renderPane(node, activeId, indexOf, false, numMode);
   const box = el('div', 'split ' + (node.dir === 'h' ? 'split--row' : 'split--col'));
-  const a = renderNode(node.children[0], activeId, indexOf);
-  const b = renderNode(node.children[1], activeId, indexOf);
+  const a = renderNode(node.children[0], activeId, indexOf, numMode);
+  const b = renderNode(node.children[1], activeId, indexOf, numMode);
   a.style.flexGrow = node.ratio;
   b.style.flexGrow = 1 - node.ratio;
   box.appendChild(a);
@@ -47,11 +61,12 @@ function renderNode(node, activeId, indexOf) {
   return box;
 }
 
-function renderPane(pane, activeId, indexOf, zoomed) {
+function renderPane(pane, activeId, indexOf, zoomed, numMode) {
   const isActive = pane.id === activeId;
   const p = el('div', 'pane' + (isActive ? ' pane--active' : '') + (zoomed ? ' pane--zoomed' : ''));
 
-  const num = el('span', 'pane__num', String((indexOf.get(pane.id) ?? 0) + 1));
+  const numIdx = indexOf.get(pane.id) ?? 0;
+  const num = el('span', 'pane__num' + (numMode ? ' pane__num--big' : ''), String(numIdx));
   p.appendChild(num);
   if (zoomed) p.appendChild(el('span', 'pane__flag', 'Z'));
 
@@ -71,12 +86,12 @@ function renderStatusBar(state) {
   const mid = el('span', 'statusbar__windows');
   state.windows.forEach((w, i) => {
     const active = i === state.activeWindowIndex;
-    const flag = active ? '*' : (i === state.activeWindowIndex - 1 ? '-' : '');
+    const flag = active ? '*' : (i === state.prevWindowIndex ? '-' : '');
     const zoom = leaves(w.root).some((p) => p.zoomed) ? 'Z' : '';
     mid.appendChild(el('span', 'win' + (active ? ' win--active' : ''), `${i}:${w.name}${flag}${zoom}`));
   });
   bar.appendChild(mid);
 
-  bar.appendChild(el('span', 'statusbar__right', '“tmux-story”'));
+  bar.appendChild(el('span', 'statusbar__right', '"tmux-story"'));
   return bar;
 }

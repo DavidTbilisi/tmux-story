@@ -19,7 +19,7 @@ export function renderMenu(root, nav) {
 
   const screen = el('div', 'screen menu');
   screen.appendChild(el('pre', 'menu__logo', LOGO));
-  screen.appendChild(el('p', 'menu__tag', 'Build tmux muscle memory the way vim-adventures builds vim’s — one chord at a time.'));
+  screen.appendChild(el('p', 'menu__tag', "Build tmux muscle memory the way vim-adventures builds vim's — one chord at a time."));
 
   const actions = el('div', 'menu__actions');
   const resumeLevel = nextLevel(p);
@@ -35,7 +35,7 @@ export function renderMenu(root, nav) {
 
   if (done > 0) screen.appendChild(el('p', 'muted', `Progress: ${done}/${total} levels`));
 
-  screen.appendChild(el('p', 'menu__foot', 'Tip: it’s all simulated in your browser — your keystrokes never touch a real shell.'));
+  screen.appendChild(el('p', 'menu__foot', "Tip: it's all simulated in your browser — your keystrokes never touch a real shell."));
 
   clear(root);
   root.appendChild(screen);

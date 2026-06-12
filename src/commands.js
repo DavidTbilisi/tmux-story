@@ -11,7 +11,7 @@
 
 import {
   activeWindow, activePane, leaves, splitPane, removeLeaf,
-  nextPane, selectDirection, makeWindow,
+  nextPane, selectDirection, makeWindow, swapPaneAdjacent, breakPane, resizeActivePane,
 } from './state.js';
 import { DEFAULT_KEY_TO_ACTION } from './keymap.js';
 
@@ -62,13 +62,26 @@ function newWindow(s) {
 function switchWindow(s, delta) {
   const n = s.windows.length;
   if (n <= 1) return false;
+  s.prevWindowIndex = s.activeWindowIndex;
   s.activeWindowIndex = (s.activeWindowIndex + delta + n) % n;
   return true;
 }
 
 function selectWindow(s, i) {
-  if (i >= 0 && i < s.windows.length) { s.activeWindowIndex = i; return true; }
+  if (i >= 0 && i < s.windows.length) {
+    s.prevWindowIndex = s.activeWindowIndex;
+    s.activeWindowIndex = i;
+    return true;
+  }
   return false;
+}
+
+function lastWindow(s) {
+  const prev = s.prevWindowIndex;
+  if (prev == null || prev === s.activeWindowIndex || prev >= s.windows.length) return false;
+  s.prevWindowIndex = s.activeWindowIndex;
+  s.activeWindowIndex = prev;
+  return true;
 }
 
 // Action id → command. input.js resolves a pressed key to an action id (via the
@@ -86,8 +99,19 @@ export const ACTIONS = {
   'new-window': { run: (s) => newWindow(s) },
   'next-window':{ run: (s) => switchWindow(s, +1) },
   'prev-window':{ run: (s) => switchWindow(s, -1) },
-  'rename-window': { run: (s) => { s.mode = 'rename'; s.renameBuffer = ''; return true; } },
-  'window-list':   { run: (s) => { s.mode = 'window-list'; return true; } },
+  'rename-window':  { run: (s) => { s.mode = 'rename'; s.renameBuffer = ''; return true; } },
+  'window-list':    { run: (s) => { s.mode = 'window-list'; return true; } },
+  'pane-numbers':   { run: (s) => { s.mode = 'pane-numbers'; return true; } },
+  'detach':         { run: (s) => { s.session.detached = true; return true; } },
+  'rename-session': { run: (s) => { s.mode = 'rename-session'; s.renameBuffer = ''; return true; } },
+  'swap-pane-prev':    { run: (s) => swapPaneAdjacent(s, -1) },
+  'swap-pane-next':    { run: (s) => swapPaneAdjacent(s, +1) },
+  'break-pane':        { run: (s) => breakPane(s) },
+  'last-window':       { run: (s) => lastWindow(s) },
+  'resize-pane-left':  { run: (s) => resizeActivePane(s, 'left') },
+  'resize-pane-right': { run: (s) => resizeActivePane(s, 'right') },
+  'resize-pane-up':    { run: (s) => resizeActivePane(s, 'up') },
+  'resize-pane-down':  { run: (s) => resizeActivePane(s, 'down') },
 };
 
 // prefix 0–9 — jump to window by number.

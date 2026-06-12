@@ -9,7 +9,7 @@
 
 import { ACTIONS } from './commands.js';
 import { ACTION_META, glyphFor } from './keymap.js';
-import { activeWindow } from './state.js';
+import { activeWindow, leaves } from './state.js';
 
 const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock']);
 
@@ -34,6 +34,39 @@ export function createInput(ctx) {
         if (name) activeWindow(s).name = name;
         s.mode = 'normal'; s.renameBuffer = null;
         ctx.onRender(); ctx.afterCommand(',');
+      } else if (e.key === 'Escape') {
+        s.mode = 'normal'; s.renameBuffer = null; ctx.onRender();
+      } else if (e.key === 'Backspace') {
+        s.renameBuffer = (s.renameBuffer || '').slice(0, -1); ctx.onRender();
+      } else if (e.key.length === 1) {
+        s.renameBuffer = (s.renameBuffer || '') + e.key; ctx.onRender();
+      }
+      return;
+    }
+
+    // --- pane-numbers sub-mode: press 0–9 to jump to that pane (0-based, like tmux) ---
+    if (s.mode === 'pane-numbers') {
+      e.preventDefault();
+      if (/^[0-9]$/.test(e.key)) {
+        const i = Number(e.key);
+        const w = activeWindow(s);
+        const ls = leaves(w.root);
+        if (i < ls.length) w.activePaneId = ls[i].id;
+        s.mode = 'normal'; ctx.onRender(); ctx.afterCommand('q');
+      } else if (e.key === 'Escape') {
+        s.mode = 'normal'; ctx.onRender();
+      }
+      return;
+    }
+
+    // --- rename-session sub-mode ---
+    if (s.mode === 'rename-session') {
+      e.preventDefault();
+      if (e.key === 'Enter') {
+        const name = (s.renameBuffer || '').trim();
+        if (name) s.session.name = name;
+        s.mode = 'normal'; s.renameBuffer = null;
+        ctx.onRender(); ctx.afterCommand('$');
       } else if (e.key === 'Escape') {
         s.mode = 'normal'; s.renameBuffer = null; ctx.onRender();
       } else if (e.key === 'Backspace') {
@@ -74,17 +107,19 @@ export function createInput(ctx) {
       s.prefix = 'idle';
       if (e.key === 'Escape') { ctx.onRender(); return; }
 
-      const key = e.key;
+      // Alt+Arrow encodes as 'M-ArrowLeft' etc. (stock tmux M-Arrow resize bindings).
+      const isArrow = e.key.startsWith('Arrow');
+      const key = (e.altKey && isArrow) ? 'M-' + e.key : e.key;
       const actionId = km.keyToAction[key];
       const cmd = actionId && ACTIONS[actionId];
       if (!cmd) {
-        ctx.notify(`No tmux binding for “${glyphFor(key)}”`);
+        ctx.notify(`No tmux binding for "${glyphFor(key)}"`);
         ctx.onRender();
         return;
       }
       if (!s.unlockedActions.has(actionId)) {
         const label = (ACTION_META[actionId] && ACTION_META[actionId].label) || actionId;
-        ctx.notify(`🔒 “${glyphFor(key)}” (${label}) isn’t unlocked in this level yet`);
+        ctx.notify(`🔒 "${glyphFor(key)}" (${label}) isn't unlocked in this level yet`);
         ctx.onRender();
         return;
       }

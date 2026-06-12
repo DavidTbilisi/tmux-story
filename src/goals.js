@@ -55,6 +55,28 @@ export const GOALS = {
     if (p.index != null) return !!s.windows[p.index] && s.windows[p.index].name === p.name;
     return s.windows.some((w) => w.name === p.name);
   },
+
+  // At least 2 windows exist and the active window has exactly 1 pane (just broken out).
+  brokenOut: (s) => s.windows.length >= 2 && leaves(activeWindow(s).root).length === 1,
+
+  // Exactly 3 windows each with at least 2 panes.
+  multiWindowPanes: (s) =>
+    s.windows.length === 3 &&
+    s.windows.every((w) => leaves(w.root).length >= 2),
+
+  sessionDetached: (s) => !!(s.session && s.session.detached),
+
+  sessionNamed: (s, p) => !!(s.session && s.session.name === p.name),
+
+  // Any split in the active window has a ratio pushed past 0.65 (or below 0.35).
+  paneExpanded: (s) => {
+    function check(node) {
+      if (node.type === 'pane') return false;
+      if (node.ratio >= 0.65 || node.ratio <= 0.35) return true;
+      return check(node.children[0]) || check(node.children[1]);
+    }
+    return check(activeWindow(s).root);
+  },
 };
 
 export function checkGoal(state, goal) {

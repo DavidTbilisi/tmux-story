@@ -56,10 +56,14 @@ export function makeWindow(name, layoutName, index) {
 export function makeState(level, unlockedActions) {
   const winDefs = (level.start && level.start.windows) || [{ name: 'bash', layout: 'single' }];
   const windows = winDefs.map((w, i) => makeWindow(w.name, w.layout, i));
+  const startIdx = (level.start && level.start.activeWindowIndex != null)
+    ? level.start.activeWindowIndex : 0;
   return {
     session: { name: (level.start && level.start.session) || 'main', detached: false },
     windows,
-    activeWindowIndex: 0,
+    activeWindowIndex: startIdx,
+    prevWindowIndex: (level.start && level.start.prevWindowIndex != null)
+      ? level.start.prevWindowIndex : null,
     prefix: 'idle',                 // 'idle' | 'armed'
     mode: 'normal',                 // 'normal' | 'rename' | 'window-list'
     renameBuffer: null,
@@ -169,6 +173,86 @@ export function computeRects(root) {
   }
   rec(root, 0, 0, 1, 1);
   return map;
+}
+
+// prefix M-Arrow — resize the active pane by nudging the nearest enclosing split
+// that runs in the given direction.
+export function resizeActivePane(s, dir) {
+  const w = activeWindow(s);
+  const STEP = 0.05;
+  const wantDir = (dir === 'left' || dir === 'right') ? 'h' : 'v';
+  let adjusted = false;
+
+  function walk(node) {
+    if (node.type === 'pane') return;
+    const [c0, c1] = node.children;
+    const inC0 = leaves(c0).some((p) => p.id === w.activePaneId);
+    const inC1 = !inC0 && leaves(c1).some((p) => p.id === w.activePaneId);
+    if (!inC0 && !inC1) return;
+    walk(inC0 ? c0 : c1);           // prefer the deepest matching split
+    if (adjusted) return;
+    if (node.dir !== wantDir) return;
+    if (inC0) {
+      node.ratio = (dir === 'right' || dir === 'down')
+        ? Math.min(0.9, node.ratio + STEP)
+        : Math.max(0.1, node.ratio - STEP);
+    } else {
+      node.ratio = (dir === 'left' || dir === 'up')
+        ? Math.min(0.9, node.ratio + STEP)
+        : Math.max(0.1, node.ratio - STEP);
+    }
+    adjusted = true;
+  }
+
+  walk(w.root);
+  return adjusted;
+}
+
+// prefix { / } — swap the active pane with the adjacent pane in DFS order.
+function swapPaneIdsInTree(root, idA, idB) {
+  function rebuild(node) {
+    if (node.type === 'pane') {
+      if (node.id === idA) return { ...node, id: idB };
+      if (node.id === idB) return { ...node, id: idA };
+      return node;
+    }
+    return { ...node, children: [rebuild(node.children[0]), rebuild(node.children[1])] };
+  }
+  return rebuild(root);
+}
+
+export function swapPaneAdjacent(s, delta) {
+  const w = activeWindow(s);
+  const ls = leaves(w.root);
+  if (ls.length <= 1) return false;
+  clearZoom(w);
+  const i = ls.findIndex((p) => p.id === w.activePaneId);
+  const j = ((i + delta) + ls.length) % ls.length;
+  w.root = swapPaneIdsInTree(w.root, ls[i].id, ls[j].id);
+  return true;
+}
+
+// prefix ! — break the active pane out into its own new window.
+export function breakPane(s) {
+  const w = activeWindow(s);
+  const ls = leaves(w.root);
+  if (ls.length <= 1) return false;
+  const paneId = w.activePaneId;
+  const { root, removed } = removeLeaf(w.root, paneId);
+  if (!removed) return false;
+  w.root = root;
+  const remaining = leaves(w.root);
+  w.activePaneId = remaining[0].id;
+  const newWin = {
+    id: 'w' + ++_wid,
+    name: 'bash',
+    index: s.windows.length,
+    root: { type: 'pane', id: paneId, zoomed: false },
+    activePaneId: paneId,
+  };
+  s.windows.push(newWin);
+  s.activeWindowIndex = s.windows.length - 1;
+  return true;
 }
 
 // prefix ← ↑ ↓ → — select the nearest pane in the given direction.
