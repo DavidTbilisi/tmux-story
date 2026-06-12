@@ -22,6 +22,7 @@ const LABELS = {
   'Arrows': { glyph: '↑↓←→', text: 'move', actions: ['pane-up', 'pane-down', 'pane-left', 'pane-right'] },
   '0-9': { glyph: '0-9', text: 'jump' },
   'grid': { glyph: '★', text: 'Pane Master', special: true },
+  'chase': { glyph: '◉', text: 'Dot Hunter', special: true },
 };
 
 // Resolve the glyph to show for a token under the active keymap (if any).

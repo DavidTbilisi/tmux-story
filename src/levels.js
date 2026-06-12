@@ -180,6 +180,24 @@ export const LEVELS = [
     ],
   },
   {
+    id: 'adv-chase', title: 'Hot Pursuit', world: 'Advanced',
+    blurb: 'A dot keeps darting around the grid. Hunt it down — again and again, fast.',
+    start: { windows: [{ name: 'bash', layout: '3x3' }] },
+    chase: true,
+    unlock: ['o', 'q', ...ARROWS],
+    rewards: ['chase'],
+    goal: { id: 'caughtDot' },
+    par: 4,
+    drills: 8,
+    objective: 'Move onto the glowing dot. Catch it 8 times.',
+    hint: 'The ● marks the target pane. Step with the arrows, or prefix then q and press the number to pounce straight onto it. Every catch sends the dot somewhere new.',
+    keys: [
+      { actions: ['pane-left', 'pane-up', 'pane-down', 'pane-right'], desc: 'move toward the dot' },
+      { actions: ['cycle-pane'], desc: 'cycle to the next pane' },
+      { actions: ['pane-numbers'], desc: 'jump by number' },
+    ],
+  },
+  {
     id: 'adv-last', title: 'Quick Switch', world: 'Advanced',
     blurb: 'Jumping by number is precise. Jumping back is instant. Learn the reflex.',
     start: {

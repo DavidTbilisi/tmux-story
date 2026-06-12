@@ -199,6 +199,26 @@ kbd {
   position: absolute; top: 4px; left: 6px;
   font-size: 11px; color: var(--gold);
 }
+
+/* "chase the dot" — the target pane glows gold and a pulsing dot marks it. */
+.pane--target {
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 1px rgba(227, 179, 65, .45), 0 0 12px rgba(227, 179, 65, .25);
+}
+.pane--target .pane__num { color: var(--gold); }
+.pane__dot {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2rem; line-height: 1;
+  color: var(--gold);
+  text-shadow: 0 0 8px rgba(227, 179, 65, .9), 0 0 18px rgba(227, 179, 65, .6);
+  pointer-events: none;
+  animation: dot-pulse .8s ease-in-out infinite;
+}
+@keyframes dot-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1);   opacity: .85; }
+  50%      { transform: translate(-50%, -50%) scale(1.35); opacity: 1; }
+}
 .pane__body { padding: 8px 10px; color: var(--ink-dim); white-space: nowrap; }
 .pane__prompt { color: var(--green-bright); }
 .pane--active .pane__body { color: var(--ink); }

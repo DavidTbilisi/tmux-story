@@ -64,6 +64,9 @@ export const GOALS = {
     s.windows.length === 3 &&
     s.windows.every((w) => leaves(w.root).length >= 2),
 
+  // The active pane has landed on the chase dot's target pane.
+  caughtDot: (s) => s.chaseTarget != null && activeWindow(s).activePaneId === s.chaseTarget,
+
   sessionDetached: (s) => !!(s.session && s.session.detached),
 
   sessionNamed: (s, p) => !!(s.session && s.session.name === p.name),

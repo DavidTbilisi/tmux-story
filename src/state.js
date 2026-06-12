@@ -19,6 +19,20 @@ export function makePane() {
   return { type: 'pane', id: 'p' + ++_pid, zoomed: false };
 }
 
+// An even N-way split in one direction, built from the binary tree: the first
+// child takes 1/n and the rest recurse into the remaining (n-1)/n. With the
+// renderer's flex-grow=ratio this lays out n equal slices. `leaf()` mints each
+// slot (a pane, or another even split for a grid).
+function evenSplit(dir, n, leaf) {
+  if (n <= 1) return leaf();
+  return { type: 'split', dir, ratio: 1 / n, children: [leaf(), evenSplit(dir, n - 1, leaf)] };
+}
+
+// rows × cols grid of equal panes (rows of columns).
+function buildGrid(rows, cols) {
+  return evenSplit('v', rows, () => evenSplit('h', cols, makePane));
+}
+
 // Build a window's root node from a named preset.
 export function buildLayout(name) {
   switch (name) {
@@ -27,12 +41,9 @@ export function buildLayout(name) {
     case 'two-v':
       return { type: 'split', dir: 'v', ratio: 0.5, children: [makePane(), makePane()] };
     case '2x2':
-      return {
-        type: 'split', dir: 'v', ratio: 0.5, children: [
-          { type: 'split', dir: 'h', ratio: 0.5, children: [makePane(), makePane()] },
-          { type: 'split', dir: 'h', ratio: 0.5, children: [makePane(), makePane()] },
-        ],
-      };
+      return buildGrid(2, 2);
+    case '3x3':
+      return buildGrid(3, 3);
     case 'single':
     default:
       return makePane();
@@ -58,7 +69,7 @@ export function makeState(level, unlockedActions) {
   const windows = winDefs.map((w, i) => makeWindow(w.name, w.layout, i));
   const startIdx = (level.start && level.start.activeWindowIndex != null)
     ? level.start.activeWindowIndex : 0;
-  return {
+  const s = {
     session: { name: (level.start && level.start.session) || 'main', detached: false },
     windows,
     activeWindowIndex: startIdx,
@@ -70,7 +81,23 @@ export function makeState(level, unlockedActions) {
     toast: null,                    // transient nudge text shown in the HUD
     unlockedActions: unlockedActions || keysToActions(level.unlock),
     levelId: level.id,
+    chaseTarget: null,              // pane id of the "chase the dot" target, if any
   };
+  if (level.chase) s.chaseTarget = pickChaseTarget(s);
+  return s;
+}
+
+// Pick a pane (by id) in the active window for the chase dot to jump to — any
+// leaf that isn't the active pane (so there's always somewhere to chase to) and,
+// where possible, isn't in `avoidIds` (e.g. the spot it just left).
+export function pickChaseTarget(s, avoidIds = []) {
+  const w = activeWindow(s);
+  const ids = leaves(w.root).map((p) => p.id);
+  const avoid = new Set([w.activePaneId, ...avoidIds]);
+  const choices = ids.filter((id) => !avoid.has(id));
+  const pool = choices.length ? choices : ids.filter((id) => id !== w.activePaneId);
+  if (!pool.length) return null;
+  return pool[(Math.random() * pool.length) | 0];
 }
 
 // ---- tree walks ------------------------------------------------------------

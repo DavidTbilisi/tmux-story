@@ -2,7 +2,7 @@
 // re-renders on every state change, detects the win, and shows the reward.
 
 import { LEVELS } from '../levels.js';
-import { makeState } from '../state.js';
+import { makeState, pickChaseTarget } from '../state.js';
 import { renderTmux } from '../render.js';
 import { checkGoal } from '../goals.js';
 import { markComplete, loadProgress, setCurrent, saveSettings } from '../progress.js';
@@ -217,28 +217,48 @@ export function startGame(root, levelId, nav) {
     rerender();
   }
 
+  function win() {
+    stopTimer();
+    solved = true;
+    const p = markComplete(level.id, level.rewards);
+    showComplete(p);
+    return 'win';
+  }
+
+  // Chase levels don't rebuild the layout between catches — the dot just hops to
+  // a new pane and the rep timer restarts, so the chase stays continuous.
+  function advanceChase(elapsed) {
+    if (elapsed > par) {
+      state.chaseTarget = pickChaseTarget(state);
+      repStart = performance.now();
+      notify(`${elapsed.toFixed(1)}s — too slow! Chase the next one.`);
+      rerender();
+      return 'slow';
+    }
+    drillsDone++;
+    if (drillsDone >= drillsNeeded) return win();
+    state.chaseTarget = pickChaseTarget(state);
+    repStart = performance.now();
+    notify(`✓ caught it! ${drillsDone}/${drillsNeeded}`);
+    rerender();
+    return 'rep';
+  }
+
   // Returns a status so the caller can pick the matching sound:
   //   'win'  level cleared · 'rep' drill banked · 'slow' over par, retry · null otherwise
   function checkWin() {
     if (solved) return null;
-    if (checkGoal(state, level.goal)) {
-      const elapsed = (performance.now() - repStart) / 1000;
-      if (elapsed > par) {
-        resetForDrill(`${elapsed.toFixed(1)}s — need < ${par}s. Again!`);
-        return 'slow';
-      }
-      drillsDone++;
-      if (drillsDone >= drillsNeeded) {
-        stopTimer();
-        solved = true;
-        const p = markComplete(level.id, level.rewards);
-        showComplete(p);
-        return 'win';
-      }
-      resetForDrill(`✓ ${elapsed.toFixed(1)}s — ${drillsDone}/${drillsNeeded}. Again!`);
-      return 'rep';
+    if (!checkGoal(state, level.goal)) return null;
+    const elapsed = (performance.now() - repStart) / 1000;
+    if (level.chase) return advanceChase(elapsed);
+    if (elapsed > par) {
+      resetForDrill(`${elapsed.toFixed(1)}s — need < ${par}s. Again!`);
+      return 'slow';
     }
-    return null;
+    drillsDone++;
+    if (drillsDone >= drillsNeeded) return win();
+    resetForDrill(`✓ ${elapsed.toFixed(1)}s — ${drillsDone}/${drillsNeeded}. Again!`);
+    return 'rep';
   }
 
   function showComplete(progress) {
