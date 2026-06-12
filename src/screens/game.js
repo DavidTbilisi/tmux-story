@@ -2,7 +2,7 @@
 // re-renders on every state change, detects the win, and shows the reward.
 
 import { LEVELS } from '../levels.js';
-import { makeState, pickChaseTarget } from '../state.js';
+import { makeState, pickChaseTarget, ARROWS } from '../state.js';
 import { renderTmux } from '../render.js';
 import { checkGoal } from '../goals.js';
 import { markComplete, loadProgress, setCurrent, saveSettings } from '../progress.js';
@@ -12,10 +12,47 @@ import { el, clear } from '../dom.js';
 import { chip } from './chips.js';
 import { play, isSoundEnabled, toggleSound } from '../sound.js';
 
+// Panes produced by each named layout preset (for deciding if a window has room
+// to chase in). Anything not listed is a single pane.
+const PANE_COUNT = { 'two-h': 2, 'two-v': 2, '2x2': 4, '3x3': 9 };
+
+// "Chase Mode" turns any level into the dot-chasing navigation drill: keep the
+// level's own layout (falling back to a 3x3 grid when the active window is a
+// single pane, so there's somewhere to chase), unlock the navigation keys, and
+// swap the goal to "catch the roaming dot". The level id/rewards are preserved,
+// so clearing it still completes the underlying level.
+function withChaseMode(level) {
+  const winDefs = (level.start && level.start.windows) || [{ name: 'bash', layout: 'single' }];
+  const activeIdx = (level.start && level.start.activeWindowIndex) || 0;
+  const aw = winDefs[activeIdx] || winDefs[0];
+  const hasRoom = (PANE_COUNT[aw && aw.layout] || 1) >= 2;
+  const windows = hasRoom ? winDefs
+    : winDefs.map((w, i) => (i === activeIdx ? { ...w, layout: '3x3' } : w));
+  return {
+    ...level,
+    chase: true,
+    drills: 8,
+    par: 4,
+    goal: { id: 'caughtDot' },
+    unlock: Array.from(new Set([...(level.unlock || []), 'o', 'q', ...ARROWS])),
+    start: { ...(level.start || {}), windows },
+    objective: 'Chase Mode — catch the roaming dot 8 times.',
+    hint: 'Move onto the glowing ● — arrows step one pane, or prefix then q and a number to pounce. Each catch sends it somewhere new.',
+    keys: [
+      { actions: ['pane-left', 'pane-up', 'pane-down', 'pane-right'], desc: 'move toward the dot' },
+      { actions: ['cycle-pane'], desc: 'cycle to the next pane' },
+      { actions: ['pane-numbers'], desc: 'jump by number' },
+    ],
+  };
+}
+
 export function startGame(root, levelId, nav) {
-  const level = LEVELS.find((l) => l.id === levelId);
-  if (!level) { nav.levels(); return () => {}; }
-  setCurrent(level.id);
+  const base = LEVELS.find((l) => l.id === levelId);
+  if (!base) { nav.levels(); return () => {}; }
+  setCurrent(base.id);
+  // Apply Chase Mode if it's toggled on (and the level isn't already a chase).
+  const chaseMode = loadProgress().settings.chaseMode && !base.chase;
+  const level = chaseMode ? withChaseMode(base) : base;
 
   // The player's remap (prefix + rebinds) drives input, keycards, HUD and chips.
   const keymap = resolveKeymap(loadProgress().settings);
@@ -64,7 +101,9 @@ export function startGame(root, levelId, nav) {
     if (on) play('command');      // a pop so you hear it came back on
     soundBtn.blur();              // return focus to the window for key chords
   });
-  header.append(back, titles, worldTag, soundBtn);
+  header.append(back, titles, worldTag);
+  if (level.chase) header.appendChild(el('span', 'tag tag--chase', '🎯 Chase'));
+  header.appendChild(soundBtn);
 
   const main = el('div', 'game__main');
   const stage = el('div', 'game__stage');

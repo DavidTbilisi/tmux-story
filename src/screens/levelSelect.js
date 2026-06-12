@@ -22,7 +22,18 @@ export function renderLevelSelect(root, nav) {
   unlockAll.title = 'Dev: unlock every level for testing';
   unlockAll.addEventListener('click', () => { saveSettings({ devUnlock: !devOn }); nav.levels(); });
   head.appendChild(unlockAll);
+  const chaseOn = p.settings.chaseMode;
+  const chaseBtn = el('button', 'btn btn--ghost' + (chaseOn ? ' btn--chase-on' : ''),
+    chaseOn ? '🎯 Chase mode: on' : '🎯 Chase mode');
+  chaseBtn.title = 'Turn any level into a chase-the-dot navigation drill';
+  chaseBtn.addEventListener('click', () => { saveSettings({ chaseMode: !chaseOn }); nav.levels(); });
+  head.appendChild(chaseBtn);
   screen.appendChild(head);
+
+  if (chaseOn) {
+    screen.appendChild(el('p', 'levels__chasebanner',
+      '🎯 Chase mode is on — every level drops a roaming dot to hunt. Click again to turn it off.'));
+  }
 
   let lastWorld = null;
   const grid = el('div', 'levels__grid');
