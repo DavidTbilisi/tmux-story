@@ -9,7 +9,7 @@ const DEFAULTS = {
   current: null,          // last level opened (resume hint)
   // prefix is the parsed prefix (HUD fallback); config is the raw ~/.tmux.conf
   // text the player pasted/uploaded — resolveKeymap() re-parses it each load.
-  settings: { prefix: 'C-b', config: '', sound: true },
+  settings: { prefix: 'C-b', config: '', sound: true, devUnlock: false },
 };
 
 export function loadProgress() {
@@ -62,8 +62,10 @@ export function resetProgress() {
 }
 
 // A level is unlocked if it's the first one or the previous one is completed.
+// The dev "unlock all" toggle (settings.devUnlock) opens everything for testing.
 export function isLevelUnlocked(levels, levelId) {
   const p = loadProgress();
+  if (p.settings.devUnlock) return true;
   const idx = levels.findIndex((l) => l.id === levelId);
   if (idx <= 0) return true;
   return p.completed.includes(levels[idx - 1].id);

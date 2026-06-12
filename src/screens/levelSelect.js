@@ -2,7 +2,7 @@
 
 import { el, clear } from '../dom.js';
 import { LEVELS } from '../levels.js';
-import { loadProgress, isLevelUnlocked, resetProgress } from '../progress.js';
+import { loadProgress, isLevelUnlocked, resetProgress, saveSettings } from '../progress.js';
 
 export function renderLevelSelect(root, nav) {
   const p = loadProgress();
@@ -17,6 +17,11 @@ export function renderLevelSelect(root, nav) {
   const reset = el('button', 'btn btn--ghost', 'Reset progress');
   reset.addEventListener('click', () => { resetProgress(); nav.levels(); });
   head.appendChild(reset);
+  const devOn = p.settings.devUnlock;
+  const unlockAll = el('button', 'btn btn--ghost', devOn ? '🔓 Locks: off' : '🔒 Unlock all');
+  unlockAll.title = 'Dev: unlock every level for testing';
+  unlockAll.addEventListener('click', () => { saveSettings({ devUnlock: !devOn }); nav.levels(); });
+  head.appendChild(unlockAll);
   screen.appendChild(head);
 
   let lastWorld = null;
