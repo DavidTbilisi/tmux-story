@@ -9,7 +9,7 @@ const DEFAULTS = {
   current: null,          // last level opened (resume hint)
   // prefix is the parsed prefix (HUD fallback); config is the raw ~/.tmux.conf
   // text the player pasted/uploaded — resolveKeymap() re-parses it each load.
-  settings: { prefix: 'C-b', config: '', sound: true, devUnlock: false, chaseMode: false },
+  settings: { prefix: 'C-b', config: '', sound: true, devUnlock: false, chaseMode: true },
 };
 
 export function loadProgress() {
