@@ -64,6 +64,9 @@ export function startGame(root, levelId, nav) {
   let toastTimer = null;
   let repStart = performance.now();
   let timerInterval = null;
+  let chaseTimer = null;
+  // How often the chase dot hops on its own (ms). Levels can tune via chaseSpeed.
+  const chaseMoveMs = level.chaseSpeed ?? 1700;
 
   function startTimer() {
     stopTimer();
@@ -80,6 +83,23 @@ export function startGame(root, levelId, nav) {
 
   function stopTimer() {
     if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  }
+
+  // The dot roams on its own: every chaseMoveMs it hops to a new pane (never the
+  // active one, so it can't auto-catch). Paused while solved or while an overlay
+  // mode is open (e.g. pane-numbers), so you can line up a jump fairly.
+  function startChaseMotion() {
+    stopChaseMotion();
+    if (!level.chase) return;
+    chaseTimer = setInterval(() => {
+      if (solved || state.mode !== 'normal') return;
+      state.chaseTarget = pickChaseTarget(state, [state.chaseTarget]);
+      rerender();
+    }, chaseMoveMs);
+  }
+
+  function stopChaseMotion() {
+    if (chaseTimer) { clearInterval(chaseTimer); chaseTimer = null; }
   }
 
   // ---- layout ----
@@ -258,6 +278,7 @@ export function startGame(root, levelId, nav) {
 
   function win() {
     stopTimer();
+    stopChaseMotion();
     solved = true;
     const p = markComplete(level.id, level.rewards);
     showComplete(p);
@@ -265,19 +286,22 @@ export function startGame(root, levelId, nav) {
   }
 
   // Chase levels don't rebuild the layout between catches — the dot just hops to
-  // a new pane and the rep timer restarts, so the chase stays continuous.
+  // a new pane and the rep timer restarts, so the chase stays continuous. The
+  // roam timer is restarted too, giving a fresh interval before the next hop.
   function advanceChase(elapsed) {
     if (elapsed > par) {
-      state.chaseTarget = pickChaseTarget(state);
+      state.chaseTarget = pickChaseTarget(state, [state.chaseTarget]);
       repStart = performance.now();
+      startChaseMotion();
       notify(`${elapsed.toFixed(1)}s — too slow! Chase the next one.`);
       rerender();
       return 'slow';
     }
     drillsDone++;
     if (drillsDone >= drillsNeeded) return win();
-    state.chaseTarget = pickChaseTarget(state);
+    state.chaseTarget = pickChaseTarget(state, [state.chaseTarget]);
     repStart = performance.now();
+    startChaseMotion();
     notify(`✓ caught it! ${drillsDone}/${drillsNeeded}`);
     rerender();
     return 'rep';
@@ -355,11 +379,13 @@ export function startGame(root, levelId, nav) {
   renderSide();
   rerender();
   startTimer();
+  startChaseMotion();
 
   // cleanup: detach the global listener when navigating away
   return () => {
     window.removeEventListener('keydown', onKey);
     if (toastTimer) clearTimeout(toastTimer);
     stopTimer();
+    stopChaseMotion();
   };
 }
