@@ -57,6 +57,7 @@ html, body {
 .btn--primary:hover { background: var(--green-bright); }
 .btn--ghost { background: transparent; }
 .btn--lg { font-size: 16px; padding: 12px 20px; }
+.btn--icon { padding: 7px 10px; font-size: 18px; line-height: 1; }
 
 kbd {
   font-family: var(--mono);
@@ -329,6 +330,7 @@ kbd {
 .settings__actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .settings__file { display: none; }
 .settings__flash { margin: 10px 0 0; min-height: 18px; color: var(--green-bright); }
+.settings__sound { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 
 .settings__preview { display: flex; flex-direction: column; gap: 4px; }
 .settings__pfx { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }

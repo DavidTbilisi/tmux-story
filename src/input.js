@@ -10,6 +10,7 @@
 import { ACTIONS } from './commands.js';
 import { ACTION_META, glyphFor } from './keymap.js';
 import { activeWindow, leaves } from './state.js';
+import { play } from './sound.js';
 
 const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock']);
 
@@ -39,7 +40,7 @@ export function createInput(ctx) {
       } else if (e.key === 'Backspace') {
         s.renameBuffer = (s.renameBuffer || '').slice(0, -1); ctx.onRender();
       } else if (e.key.length === 1) {
-        s.renameBuffer = (s.renameBuffer || '') + e.key; ctx.onRender();
+        s.renameBuffer = (s.renameBuffer || '') + e.key; play('type'); ctx.onRender();
       }
       return;
     }
@@ -72,7 +73,7 @@ export function createInput(ctx) {
       } else if (e.key === 'Backspace') {
         s.renameBuffer = (s.renameBuffer || '').slice(0, -1); ctx.onRender();
       } else if (e.key.length === 1) {
-        s.renameBuffer = (s.renameBuffer || '') + e.key; ctx.onRender();
+        s.renameBuffer = (s.renameBuffer || '') + e.key; play('type'); ctx.onRender();
       }
       return;
     }
@@ -95,6 +96,7 @@ export function createInput(ctx) {
       if (e.ctrlKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === pfx.key) {
         e.preventDefault();
         s.prefix = 'armed';
+        play('prefix');
         ctx.onRender();
       }
       return;
@@ -114,12 +116,14 @@ export function createInput(ctx) {
       const cmd = actionId && ACTIONS[actionId];
       if (!cmd) {
         ctx.notify(`No tmux binding for "${glyphFor(key)}"`);
+        play('error');
         ctx.onRender();
         return;
       }
       if (!s.unlockedActions.has(actionId)) {
         const label = (ACTION_META[actionId] && ACTION_META[actionId].label) || actionId;
         ctx.notify(`🔒 "${glyphFor(key)}" (${label}) isn't unlocked in this level yet`);
+        play('error');
         ctx.onRender();
         return;
       }

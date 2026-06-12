@@ -6,9 +6,14 @@ import { renderMenu } from './screens/menu.js';
 import { renderLevelSelect } from './screens/levelSelect.js';
 import { startGame } from './screens/game.js';
 import { renderSettings } from './screens/settings.js';
+import { loadProgress } from './progress.js';
+import { setSoundEnabled } from './sound.js';
 
 const app = document.getElementById('app');
 let cleanup = null;
+
+// Honor the saved sound preference (defaults to on).
+setSoundEnabled(loadProgress().settings.sound !== false);
 
 const nav = {
   menu: () => go('menu'),

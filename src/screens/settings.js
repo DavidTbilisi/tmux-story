@@ -9,6 +9,7 @@ import {
   resolveKeymap, parseTmuxConf, glyphFor,
   ACTION_META, DEFAULT_ACTION_TO_KEY,
 } from '../keymap.js';
+import { setSoundEnabled, isSoundEnabled, play } from '../sound.js';
 
 const PLACEHOLDER = [
   '# paste your ~/.tmux.conf here',
@@ -92,6 +93,21 @@ export function renderSettings(root, nav) {
   const flashEl = el('p', 'settings__flash muted', '');
   left.appendChild(flashEl);
   function flash(msg) { flashEl.textContent = msg; }
+
+  // ---- sound preference ----
+  const soundRow = el('div', 'settings__sound');
+  const soundBtn = el('button', 'btn btn--ghost', '');
+  const soundLabel = () => (isSoundEnabled() ? '🔊 Sounds: On' : '🔇 Sounds: Off');
+  soundBtn.textContent = soundLabel();
+  soundBtn.addEventListener('click', () => {
+    const on = !isSoundEnabled();
+    setSoundEnabled(on);
+    saveSettings({ sound: on });
+    soundBtn.textContent = soundLabel();
+    if (on) play('win'); // a cheerful sample when you switch them back on
+  });
+  soundRow.append(el('span', 'muted', 'Cute sound effects'), soundBtn);
+  left.appendChild(soundRow);
 
   // ---- right column: live preview ----
   const right = el('div', 'settings__col');

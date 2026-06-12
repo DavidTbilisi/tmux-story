@@ -5,11 +5,12 @@ import { LEVELS } from '../levels.js';
 import { makeState } from '../state.js';
 import { renderTmux } from '../render.js';
 import { checkGoal } from '../goals.js';
-import { markComplete, loadProgress, setCurrent } from '../progress.js';
+import { markComplete, loadProgress, setCurrent, saveSettings } from '../progress.js';
 import { createInput } from '../input.js';
 import { resolveKeymap, keysToActions, keysForActions } from '../keymap.js';
 import { el, clear } from '../dom.js';
 import { chip } from './chips.js';
+import { play, isSoundEnabled, toggleSound } from '../sound.js';
 
 export function startGame(root, levelId, nav) {
   const level = LEVELS.find((l) => l.id === levelId);
@@ -54,7 +55,16 @@ export function startGame(root, levelId, nav) {
   titles.appendChild(el('h2', null, level.title));
   titles.appendChild(el('p', 'muted', level.blurb));
   const worldTag = el('span', 'tag', level.world);
-  header.append(back, titles, worldTag);
+  const soundBtn = el('button', 'btn btn--ghost btn--icon', isSoundEnabled() ? '🔊' : '🔇');
+  soundBtn.title = 'Toggle sounds';
+  soundBtn.addEventListener('click', () => {
+    const on = toggleSound();
+    saveSettings({ sound: on });
+    soundBtn.textContent = on ? '🔊' : '🔇';
+    if (on) play('command');      // a pop so you hear it came back on
+    soundBtn.blur();              // return focus to the window for key chords
+  });
+  header.append(back, titles, worldTag, soundBtn);
 
   const main = el('div', 'game__main');
   const stage = el('div', 'game__stage');
@@ -207,13 +217,15 @@ export function startGame(root, levelId, nav) {
     rerender();
   }
 
+  // Returns a status so the caller can pick the matching sound:
+  //   'win'  level cleared · 'rep' drill banked · 'slow' over par, retry · null otherwise
   function checkWin() {
-    if (solved) return;
+    if (solved) return null;
     if (checkGoal(state, level.goal)) {
       const elapsed = (performance.now() - repStart) / 1000;
       if (elapsed > par) {
         resetForDrill(`${elapsed.toFixed(1)}s — need < ${par}s. Again!`);
-        return;
+        return 'slow';
       }
       drillsDone++;
       if (drillsDone >= drillsNeeded) {
@@ -221,10 +233,12 @@ export function startGame(root, levelId, nav) {
         solved = true;
         const p = markComplete(level.id, level.rewards);
         showComplete(p);
-      } else {
-        resetForDrill(`✓ ${elapsed.toFixed(1)}s — ${drillsDone}/${drillsNeeded}. Again!`);
+        return 'win';
       }
+      resetForDrill(`✓ ${elapsed.toFixed(1)}s — ${drillsDone}/${drillsNeeded}. Again!`);
+      return 'rep';
     }
+    return null;
   }
 
   function showComplete(progress) {
@@ -266,7 +280,16 @@ export function startGame(root, levelId, nav) {
     keymap,
     notify,
     onRender: rerender,
-    afterCommand: () => { rerender(); checkWin(); },
+    afterCommand: () => {
+      rerender();
+      const status = checkWin();
+      // win/rep get their own celebratory chimes; a too-slow rep gets the gentle
+      // "aw"; an ordinary successful move gets the little command pop.
+      play(status === 'win' ? 'win'
+        : status === 'rep' ? 'rep'
+        : status === 'slow' ? 'error'
+        : 'command');
+    },
   });
   window.addEventListener('keydown', onKey);
 
