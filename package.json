@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "start": "python3 -m http.server 8000",
-    "test": "node test/state.test.mjs && node test/keymap.test.mjs",
+    "test": "node test/state.test.mjs && node test/keymap.test.mjs && node test/reflexes.test.mjs",
     "test:e2e": "BASE=http://localhost:8123 node test/smoke.e2e.mjs",
     "test:e2e:remap": "BASE=http://localhost:8123 node test/remap.e2e.mjs"
   },

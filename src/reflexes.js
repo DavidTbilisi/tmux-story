@@ -64,3 +64,63 @@ export function unlockedFromLevels(levels, completedIds) {
   }
   return set;
 }
+
+// ---- spaced-execution scheduling ------------------------------------------
+//
+// Persistence makes the Gym a real trainer: each reflex carries a level on the
+// automaticity ladder (0 new … 5 automatic) and a `due` time. Correct-and-fast
+// answers raise the level and push `due` further out; slow answers repeat soon;
+// misses drop the level and make it due immediately. Selection then weights
+// overdue + low-level reflexes higher, so weak ones resurface across sessions.
+// All functions are pure (time is passed in), so they unit-test in node.
+
+const DAY = 86400000;
+// Interval until next due, indexed by the level you land on after a fast answer.
+const INTERVALS = [0, 1 * DAY, 2 * DAY, 4 * DAY, 8 * DAY, 16 * DAY];
+export const AUTOMATIC_LEVEL = 5;
+const LEVEL_LABELS = ['new', 'seen', 'recalled', 'timed', 'pressured', 'automatic'];
+
+export function emptyStat() {
+  return { attempts: 0, correct: 0, fast: 0, streak: 0, level: 0, lastSeen: 0, due: 0 };
+}
+
+export function levelLabel(level) {
+  return LEVEL_LABELS[Math.max(0, Math.min(AUTOMATIC_LEVEL, level || 0))];
+}
+
+// Fold one attempt into a stat; returns a NEW stat (doesn't mutate the input).
+//   correct: did they fire the right action?   fast: within the speed target?
+export function updateReflexStat(prev, correct, fast, now) {
+  const s = { ...(prev || emptyStat()) };
+  s.attempts += 1;
+  if (correct) s.correct += 1;
+  if (correct && fast) s.fast += 1;
+  s.streak = correct && fast ? s.streak + 1 : 0;
+  if (!correct) {
+    s.level = Math.max(0, s.level - 1);
+    s.due = now;                                  // retest immediately
+  } else if (!fast) {
+    s.level = Math.max(1, s.level);
+    s.due = now + DAY;                            // knows it, but slow — soon
+  } else {
+    s.level = Math.min(AUTOMATIC_LEVEL, s.level + 1);
+    s.due = now + INTERVALS[s.level];
+  }
+  s.lastSeen = now;
+  return s;
+}
+
+// Selection weight for the next cue: overdue and low-level reflexes score higher,
+// so weak/forgotten ones come up more often. Always ≥ a small base.
+export function reflexWeight(stat, now) {
+  const s = stat || emptyStat();
+  let w = 1 + (AUTOMATIC_LEVEL - s.level) * 0.6;  // weaker → heavier
+  if (!s.attempts) return w + 2;                  // never drilled → prioritise
+  if (s.due <= now) w += 2 + Math.min(3, (now - s.due) / DAY); // overdue bonus
+  if (s.streak === 0) w += 1;                     // last answer wasn't clean
+  return w;
+}
+
+export function isAutomatic(stat) {
+  return !!stat && stat.level >= AUTOMATIC_LEVEL;
+}

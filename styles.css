@@ -422,3 +422,6 @@ kbd {
 .gym__weakrow { display: flex; align-items: center; gap: 10px; }
 .gym__weakchord { display: inline-flex; gap: 4px; }
 .gym__weaklabel { flex: 1; }
+.gym__mastery { margin: 0 0 16px; color: var(--ink-dim); font-size: 14px; }
+.gym__weaklevel { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); border: 1px solid rgba(88,166,255,.3); border-radius: 999px; padding: 1px 8px; }
+.menu__mastery { margin: 2px 0 0; color: var(--gold); font-size: 14px; }

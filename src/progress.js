@@ -7,6 +7,7 @@ const DEFAULTS = {
   completed: [],          // level ids
   collected: [],          // earned badge tokens (for the trophy tray)
   current: null,          // last level opened (resume hint)
+  reflexStats: {},        // action id → spaced-execution stat (see reflexes.js)
   // prefix is the parsed prefix (HUD fallback); config is the raw ~/.tmux.conf
   // text the player pasted/uploaded — resolveKeymap() re-parses it each load.
   settings: { prefix: 'C-b', config: '', sound: true, devUnlock: false, chaseMode: true },
@@ -23,6 +24,7 @@ export function loadProgress() {
       settings: { ...DEFAULTS.settings, ...(p.settings || {}) },
       completed: p.completed || [],
       collected: p.collected || [],
+      reflexStats: p.reflexStats || {},
     };
   } catch {
     return structuredCopy(DEFAULTS);
@@ -55,6 +57,14 @@ export function saveSettings(patch) {
   p.settings = { ...p.settings, ...patch };
   saveProgress(p);
   return p.settings;
+}
+
+// Persist the whole reflex-stats map (action id → stat) from the Reflex Gym.
+export function saveReflexStats(stats) {
+  const p = loadProgress();
+  p.reflexStats = stats || {};
+  saveProgress(p);
+  return p.reflexStats;
 }
 
 export function resetProgress() {

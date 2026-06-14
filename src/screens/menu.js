@@ -3,6 +3,7 @@
 import { el, clear } from '../dom.js';
 import { loadProgress } from '../progress.js';
 import { LEVELS } from '../levels.js';
+import { isAutomatic } from '../reflexes.js';
 
 const LOGO = String.raw`
  _                                  _
@@ -36,6 +37,9 @@ export function renderMenu(root, nav) {
   screen.appendChild(actions);
 
   if (done > 0) screen.appendChild(el('p', 'muted', `Progress: ${done}/${total} levels`));
+
+  const autoCount = Object.values(p.reflexStats || {}).filter(isAutomatic).length;
+  if (autoCount > 0) screen.appendChild(el('p', 'menu__mastery', `🥊 ${autoCount} reflexes automatic`));
 
   screen.appendChild(el('p', 'menu__foot', "Tip: it's all simulated in your browser — your keystrokes never touch a real shell."));
 

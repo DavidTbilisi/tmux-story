@@ -10,9 +10,12 @@
 
 import { el, clear } from '../dom.js';
 import { LEVELS } from '../levels.js';
-import { loadProgress } from '../progress.js';
+import { loadProgress, saveReflexStats } from '../progress.js';
 import { resolveKeymap, glyphFor, ACTION_META } from '../keymap.js';
-import { REFLEXES, availableReflexes, unlockedFromLevels } from '../reflexes.js';
+import {
+  REFLEXES, availableReflexes, unlockedFromLevels,
+  updateReflexStat, reflexWeight, isAutomatic, levelLabel,
+} from '../reflexes.js';
 import { play } from '../sound.js';
 
 const TARGET_MS = 3500;   // "fast" threshold (the speed gate)
@@ -37,8 +40,11 @@ export function startReflexGym(root, nav) {
     : availableReflexes(unlockedFromLevels(LEVELS, p.completed));
   const totalRounds = Math.min(14, Math.max(8, deck.length + 4));
 
-  // Per-reflex running stats, keyed by action — drives weak-first weighting.
+  // Per-reflex running stats for THIS session (drives the weak list + summary).
   const stat = new Map(deck.map((r) => [r.action, { seen: 0, wrong: 0, timeSum: 0 }]));
+  // Persisted cross-session stats (spaced-execution ladder), copied so we save once.
+  const persisted = { ...(p.reflexStats || {}) };
+  let leveledUp = 0;           // reflexes that climbed the ladder this session
   const results = [];          // { action, correct, ms, pressed }
   let current = null;
   let prevAction = null;
@@ -122,11 +128,12 @@ export function startReflexGym(root, nav) {
 
   // ---- round flow ----
   function pickReflex() {
-    // weight weak/slow reflexes higher; avoid an immediate repeat when possible
+    // Weight by persisted spaced-execution state (overdue + low-level score
+    // higher) plus this session's misses; avoid an immediate repeat.
+    const now = Date.now();
     const weighted = deck.map((r) => {
       const s = stat.get(r.action);
-      const avg = s.seen ? s.timeSum / s.seen : 0;
-      let w = 1 + 3 * s.wrong + (avg > TARGET_MS ? 1 : 0);
+      let w = reflexWeight(persisted[r.action], now) + 2 * s.wrong;
       if (r.action === prevAction && deck.length > 1) w = 0.0001;
       return { r, w };
     });
@@ -154,14 +161,20 @@ export function startReflexGym(root, nav) {
     clearTimers();
     const ms = performance.now() - roundStart;
     const correct = pressed === current.action;
+    const fast = correct && ms <= TARGET_MS;
     const s = stat.get(current.action);
     s.seen++; s.timeSum += ms; if (!correct) s.wrong++;
+    // Fold into the persisted spaced-execution ladder and save.
+    const before = (persisted[current.action] && persisted[current.action].level) || 0;
+    persisted[current.action] = updateReflexStat(persisted[current.action], correct, fast, Date.now());
+    if (persisted[current.action].level > before) leveledUp++;
+    saveReflexStats(persisted);
     const r = { action: current.action, correct, ms, pressed };
     results.push(r);
     roundsDone++;
     streak = correct ? streak + 1 : 0;
     phase = 'feedback';
-    play(correct ? (ms <= TARGET_MS ? 'rep' : 'command') : 'error');
+    play(correct ? (fast ? 'rep' : 'command') : 'error');
     renderFeedback(r); renderHud();
     advTimer = setTimeout(nextRound, 1200);
   }
@@ -233,6 +246,13 @@ export function startReflexGym(root, nav) {
     g.appendChild(el('span', null, gate.t));
     box.appendChild(g);
 
+    // Cross-session mastery: how many of the unlocked reflexes are automatic.
+    const automatic = deck.filter((r) => isAutomatic(persisted[r.action])).length;
+    const mastery = el('p', 'gym__mastery',
+      `${automatic}/${deck.length} reflexes automatic`
+      + (leveledUp ? ` · ${leveledUp} leveled up this session` : ''));
+    box.appendChild(mastery);
+
     // Weak reflexes — what to drill next (missed, or consistently slow).
     const weak = deck
       .map((r) => ({ r, s: stat.get(r.action) }))
@@ -247,7 +267,9 @@ export function startReflexGym(root, nav) {
         const chord = el('span', 'gym__weakchord');
         chord.appendChild(el('kbd', null, keymap.prefixLabel));
         chord.appendChild(el('kbd', null, glyphFor(keymap.actionToKey[r.action])));
+        const lvl = (persisted[r.action] && persisted[r.action].level) || 0;
         row.append(chord, el('span', 'gym__weaklabel', labelOf(r.action)),
+          el('span', 'gym__weaklevel', levelLabel(lvl)),
           el('span', 'muted', s.wrong ? `${s.wrong} missed` : 'slow'));
         list.appendChild(row);
       }
