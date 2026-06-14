@@ -28,9 +28,11 @@ export function renderMenu(root, nav) {
   play.addEventListener('click', () => nav.game(resumeLevel.id));
   const map = el('button', 'btn btn--ghost btn--lg', 'Level map');
   map.addEventListener('click', () => nav.levels());
+  const gym = el('button', 'btn btn--ghost btn--lg', '🥊 Reflex Gym');
+  gym.addEventListener('click', () => nav.reflex());
   const keys = el('button', 'btn btn--ghost btn--lg', '⌨ Keybindings');
   keys.addEventListener('click', () => nav.settings());
-  actions.append(play, map, keys);
+  actions.append(play, map, gym, keys);
   screen.appendChild(actions);
 
   if (done > 0) screen.appendChild(el('p', 'muted', `Progress: ${done}/${total} levels`));

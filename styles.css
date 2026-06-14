@@ -377,3 +377,48 @@ kbd {
 .settings__warn h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--gold); }
 .settings__warnlist { margin: 0; padding-left: 18px; }
 .settings__warnlist li { font-size: 12px; color: var(--ink-dim); line-height: 1.5; margin-bottom: 3px; }
+
+/* ---- reflex cue box on level screens ---- */
+.cuebox {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-bottom: 14px; padding: 10px 12px;
+  background: rgba(88, 166, 255, .07);
+  border: 1px solid rgba(88, 166, 255, .3); border-left-width: 3px;
+  border-radius: 8px;
+}
+.cuebox__label { font-size: 10px; letter-spacing: .14em; color: var(--accent); }
+.cuebox__text { font-size: 14px; color: var(--ink); }
+
+/* ---- Reflex Gym ---- */
+.gym__stage { display: flex; align-items: center; justify-content: center; min-height: 320px; margin: 8px 0 16px; }
+.gym__cue {
+  width: 100%; max-width: 640px; text-align: center;
+  padding: 40px 28px;
+  background: var(--panel);
+  border: 1px solid var(--line); border-radius: 14px;
+}
+.gym__cue--ok  { border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
+.gym__cue--bad { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger) inset; }
+.gym__cuelabel { font-size: 11px; letter-spacing: .16em; color: var(--accent); margin-bottom: 14px; }
+.gym__cuetext { font-size: 26px; line-height: 1.35; color: var(--ink); }
+.gym__cuehint { margin-top: 18px; font-size: 13px; color: var(--ink-dim); }
+.gym__fbline { margin-top: 14px; font-size: 15px; color: var(--ink-dim); }
+
+.gym__hud { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 10px 14px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; }
+.gym__hud .hud__left { flex: 1; }
+.gym__streak { display: flex; align-items: center; gap: 4px; }
+.gym__streaknum { font-weight: 700; color: var(--gold); font-size: 16px; }
+
+.gym__summary { width: 100%; max-width: 640px; text-align: center; padding: 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.gym__summary h3 { margin: 0 0 18px; }
+.gym__stats { display: flex; justify-content: center; gap: 28px; flex-wrap: wrap; margin-bottom: 20px; }
+.gym__stat { display: flex; flex-direction: column; gap: 2px; }
+.gym__statnum { font-size: 26px; font-weight: 700; color: var(--green-bright); }
+.gym__statlabel { font-size: 12px; color: var(--ink-dim); }
+.gym__gate { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 18px; padding: 8px 16px; border: 1px solid var(--gold); border-radius: 999px; color: var(--ink); }
+.gym__gatenum { font-weight: 700; color: var(--gold); }
+.gym__weakh { margin: 14px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--gold); }
+.gym__weak { display: flex; flex-direction: column; gap: 6px; text-align: left; margin-bottom: 18px; }
+.gym__weakrow { display: flex; align-items: center; gap: 10px; }
+.gym__weakchord { display: inline-flex; gap: 4px; }
+.gym__weaklabel { flex: 1; }

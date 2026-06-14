@@ -6,6 +6,7 @@ import { renderMenu } from './screens/menu.js';
 import { renderLevelSelect } from './screens/levelSelect.js';
 import { startGame } from './screens/game.js';
 import { renderSettings } from './screens/settings.js';
+import { startReflexGym } from './screens/reflexGym.js';
 import { loadProgress } from './progress.js';
 import { setSoundEnabled } from './sound.js';
 
@@ -20,6 +21,7 @@ const nav = {
   levels: () => go('levels'),
   game: (levelId) => go('game', { levelId }),
   settings: () => go('settings'),
+  reflex: () => go('reflex'),
 };
 
 function go(view, params = {}) {
@@ -28,6 +30,7 @@ function go(view, params = {}) {
   else if (view === 'levels') cleanup = renderLevelSelect(app, nav);
   else if (view === 'game') cleanup = startGame(app, params.levelId, nav);
   else if (view === 'settings') cleanup = renderSettings(app, nav);
+  else if (view === 'reflex') cleanup = startReflexGym(app, nav);
 }
 
 go('menu');

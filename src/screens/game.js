@@ -11,6 +11,7 @@ import { resolveKeymap, keysToActions, keysForActions } from '../keymap.js';
 import { el, clear } from '../dom.js';
 import { chip } from './chips.js';
 import { play, isSoundEnabled, toggleSound } from '../sound.js';
+import { reflexFor } from '../reflexes.js';
 
 // Panes produced by each named layout preset (for deciding if a window has room
 // to chase in). Anything not listed is a single pane.
@@ -144,6 +145,18 @@ export function startGame(root, levelId, nav) {
 
   function renderSide() {
     clear(side);
+    // Frame the level as a reflex: the cue (situation) you learn to recognise,
+    // then the move it should trigger. (Skipped in Chase Mode, which retargets
+    // every level to the same "catch the dot" goal.)
+    const primary = level.keys && level.keys[0] && level.keys[0].actions && level.keys[0].actions[0];
+    const reflex = !level.chase && primary ? reflexFor(primary) : null;
+    if (reflex) {
+      const cueBox = el('div', 'cuebox');
+      cueBox.appendChild(el('span', 'cuebox__label', 'WHEN YOU SEE'));
+      cueBox.appendChild(el('span', 'cuebox__text', reflex.cue));
+      side.appendChild(cueBox);
+    }
+
     side.appendChild(el('h3', 'side__h', 'Objective'));
     side.appendChild(el('p', 'objective', level.objective));
 
